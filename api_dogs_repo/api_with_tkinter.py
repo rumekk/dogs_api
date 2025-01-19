@@ -48,8 +48,6 @@ class DogApp:
     def show_image(self, image_data):
         if 'url' in image_data:
             url = image_data['url']
-        elif 'image' in image_data:
-            url = image_data['image']['url']
 
         response = requests.get(url, stream=True)
         if response.status_code == 200:
@@ -76,9 +74,41 @@ class DogApp:
 
     def show_favs(self):
         favs = api_dogs.get_favourites(self.user_id)
-        for image in favs:
-            if image['image']:
-                self.show_image(image)
+        self.favs_display(favs)
+
+    def favs_display(self, favs):
+        favs_window = tk.Toplevel(self.root)
+        favs_window.title("Favourites")
+        favs_window.geometry("800x600")
+
+        for index, fav in enumerate(favs):
+            url = fav['image']['url']
+            frame = ttk.Frame(favs_window)
+            frame.grid(column=index % 3, row=index // 3, padx=10, pady=10)
+
+            response = requests.get(url, stream=True)
+            if response.status_code == 200:
+                img_data = response.raw
+                image = Image.open(img_data)
+                image.thumbnail((200, 200))
+                img = ImageTk.PhotoImage(image)
+                label = ttk.Label(frame, image=img)
+                label.image = img
+                label.grid(row=0, column=0)
+
+                ttk.Button(frame, text="Remove", command=lambda fav_id=fav['id']: self.remove_from_favs(
+                    fav_id, favs_window)).grid(row=1, column=0)
+            else:
+                messagebox.showerror("Error")
+
+    def remove_from_favs(self, fav_id, favs_window):
+        response = api_dogs.remove_from_favourites(self.user_id, str(fav_id))
+        if response and response.get('message') == 'SUCCESS':
+            messagebox.showinfo("success")
+            favs_window.destroy()
+            self.show_favs()
+        else:
+            messagebox.showerror("Error")
 
 
 if __name__ == '__main__':
