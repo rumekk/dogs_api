@@ -48,17 +48,16 @@ class DogApp:
     def show_image(self, image_data):
         if 'url' in image_data:
             url = image_data['url']
-
-        response = requests.get(url, stream=True)
-        if response.status_code == 200:
+        try:
+            response = requests.get(url, stream=True)
             img_data = response.raw
             image = Image.open(img_data)
             image.thumbnail((600, 400))
             img = ImageTk.PhotoImage(image)
             self.img_label.config(image=img)
             self.img_label.image = img
-        else:
-            messagebox.showerror("Error")
+        except requests.RequestException as e:
+            messagebox.showerror(f"Error {e} occured.")
 
     def add_to_favs(self):
         if self.random_dog is not None:
@@ -66,11 +65,12 @@ class DogApp:
                 self.random_dog['id'], self.user_id)
             if result and 'message' in result and result['message'] == 'SUCCESS':
                 messagebox.showinfo(
-                    message='Image successfully added to favourites.')
+                    title='Dogs API', message='Image successfully added to favourites.')
             else:
                 messagebox.showerror("Error")
         else:
-            messagebox.showerror(message="You need to get image first!")
+            messagebox.showerror(
+                title='Dogs API', message="You need to get image first!")
 
     def show_favs(self):
         favs = api_dogs.get_favourites(self.user_id)
@@ -81,9 +81,32 @@ class DogApp:
         favs_window.title("Favourites")
         favs_window.geometry("800x600")
 
+        container = ttk.Frame(favs_window)
+        container.pack(fill='both', expand=True)
+
+        canvas = tk.Canvas(container)
+        scrollbar = ttk.Scrollbar(
+            container, orient='vertical', command=canvas.yview)
+        scroll_frame = ttk.Frame(canvas)
+
+        window_id = canvas.create_window(
+            (0, 0), window=scroll_frame, anchor='nw')
+
+        def on_frame():
+            favs_window.update_idletasks()
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        scroll_frame.bind("<Configure>", lambda e: on_frame())
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(
+            window_id, width=canvas.winfo_width()))
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
         for index, fav in enumerate(favs):
             url = fav['image']['url']
-            frame = ttk.Frame(favs_window)
+            frame = ttk.Frame(scroll_frame)
             frame.grid(column=index % 3, row=index // 3, padx=10, pady=10)
 
             response = requests.get(url, stream=True)
@@ -101,10 +124,13 @@ class DogApp:
             else:
                 messagebox.showerror("Error")
 
+        favs_window.after(100, on_frame)
+
     def remove_from_favs(self, fav_id, favs_window):
         response = api_dogs.remove_from_favourites(self.user_id, str(fav_id))
         if response and response.get('message') == 'SUCCESS':
-            messagebox.showinfo("success")
+            messagebox.showinfo(
+                title="Dogs API", message="Image removed from favourites.")
             favs_window.destroy()
             self.show_favs()
         else:
